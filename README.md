@@ -56,6 +56,8 @@ npx vercel --prod  # 重新部署
 | [docs/SPEC.md](docs/SPEC.md) | 系統規格說明 |
 | [docs/API.md](docs/API.md) | API 介面文件 |
 | [docs/schema.sql](docs/schema.sql) | 資料庫 Schema |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 前端架構參考文件 |
+| [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | 7 分鐘 Demo 展示腳本 |
 
 ## 專案結構
 
