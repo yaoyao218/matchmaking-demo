@@ -133,31 +133,61 @@ function confirmCreate() {
   createModalOpen.value = false
 }
 
+// ── Grid editing（組員課表可拖曳編輯）────────────────────────────────
+const isDragging = ref(false)
+const dragSetMode = ref(true)
+
+function isGroupBusy(d: number, p: number): boolean {
+  if (!activeProject.value) return false
+  const bit = BigInt((d - 1) * 10 + (p - 1))
+  return (BigInt(activeProject.value.groupScheduleMask) & (1n << bit)) !== 0n
+}
+
+function toggleGroupSlot(d: number, p: number) {
+  if (!activeProject.value || selectedApp.value) return
+  const bit = BigInt((d - 1) * 10 + (p - 1))
+  let mask = BigInt(activeProject.value.groupScheduleMask)
+  if (dragSetMode.value) mask |= (1n << bit)
+  else mask &= ~(1n << bit)
+  activeProject.value.groupScheduleMask = mask.toString()
+}
+
+function onGridMousedown(d: number, p: number) {
+  if (!activeProject.value || selectedApp.value) return
+  isDragging.value = true
+  dragSetMode.value = !isGroupBusy(d, p)
+  toggleGroupSlot(d, p)
+}
+
+function onGridMouseenter(d: number, p: number) {
+  if (isDragging.value) toggleGroupSlot(d, p)
+}
+
+function onGridMouseup() { isDragging.value = false }
+
 // ── Grid slot helpers ─────────────────────────────────────────────────
 function getSlotStyle(d: number, p: number): string {
   if (!selectedApp.value || !activeProject.value) {
-    const gSlots = decompressMask(BigInt(activeProject.value?.groupScheduleMask ?? '0'))
-    return gSlots.some(s => s.day === d && s.period === p)
-      ? 'bg-slate-200 border-slate-300 text-slate-500'
-      : 'bg-white border-slate-200 text-slate-300'
+    return isGroupBusy(d, p)
+      ? 'bg-blue-600 border-blue-700 text-white cursor-pointer hover:bg-blue-500'
+      : 'bg-white border-slate-200 text-slate-300 cursor-pointer hover:bg-blue-50 hover:border-blue-300'
   }
   const { conflictSlots, goldenSlots } = selectedApp.value.calc
   if (conflictSlots.some(s => s.day === d && s.period === p))
     return 'bg-red-500 border-red-600 text-white'
   if (goldenSlots.some(s => s.day === d && s.period === p))
     return 'bg-emerald-500 border-emerald-600 text-white'
-  const gSlots = decompressMask(BigInt(activeProject.value.groupScheduleMask))
-  if (gSlots.some(s => s.day === d && s.period === p))
+  if (isGroupBusy(d, p))
     return 'bg-slate-200 border-slate-300 text-slate-500'
   return 'bg-white border-slate-200 text-slate-200'
 }
 
 function getSlotText(d: number, p: number): string {
-  if (!selectedApp.value) return ''
+  if (!selectedApp.value) return isGroupBusy(d, p) ? '課' : ''
   const { conflictSlots, goldenSlots } = selectedApp.value.calc
   if (conflictSlots.some(s => s.day === d && s.period === p)) return '衝突'
   if (goldenSlots.some(s => s.day === d && s.period === p)) return '開會'
-  return ''
+  return isGroupBusy(d, p) ? '課' : ''
 }
 
 // Member mini-grid
@@ -322,17 +352,23 @@ function getMemberSlotStyle(mask: string, d: number, p: number): string {
           <div>
             <h2 class="text-lg font-bold text-slate-800">課表即時疊加看板</h2>
             <p class="text-xs text-slate-400 mt-0.5">
-              {{ selectedApp ? `正在檢視：${selectedApp.studentName}` : '點擊左側申請人以檢視課表' }}
+              {{ selectedApp ? `正在檢視：${selectedApp.studentName}` : '點擊或拖曳格子設定組員既有課表' }}
             </p>
           </div>
           <div class="flex flex-col gap-1.5 text-xs font-medium shrink-0">
-            <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-slate-200 rounded border border-slate-300"></div>原有組員課</div>
+            <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-blue-600 rounded"></div>組員有課（可拖曳編輯）</div>
+            <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-slate-200 rounded border border-slate-300"></div>疊加後有課</div>
             <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-red-500 rounded"></div>時間衝突</div>
             <div class="flex items-center gap-1.5"><div class="w-3 h-3 bg-emerald-500 rounded"></div>黃金共同空堂</div>
           </div>
         </div>
 
-        <div class="grid gap-1.5 bg-slate-50 p-3 rounded-xl border border-slate-100" style="grid-template-columns: 2rem repeat(5, 1fr);">
+        <div
+          class="grid gap-1.5 bg-slate-50 p-3 rounded-xl border border-slate-100 select-none"
+          style="grid-template-columns: 2rem repeat(5, 1fr);"
+          @mouseleave="onGridMouseup"
+          @mouseup="onGridMouseup"
+        >
           <div class="text-center font-bold text-slate-400 text-xs py-1">節次</div>
           <div v-for="d in 5" :key="`lh${d}`" class="text-center font-bold text-slate-700 text-sm py-1">
             週{{ ['一','二','三','四','五'][d - 1] }}
@@ -343,7 +379,9 @@ function getMemberSlotStyle(mask: string, d: number, p: number): string {
             <div
               v-for="d in 5"
               :key="`l${d}-${p}`"
-              :class="['h-11 rounded-lg border text-xs font-bold flex items-center justify-center transition-all duration-200 select-none', getSlotStyle(d, p)]"
+              @mousedown.prevent="onGridMousedown(d, p)"
+              @mouseenter="onGridMouseenter(d, p)"
+              :class="['h-11 rounded-lg border text-xs font-bold flex items-center justify-center transition-all duration-200', getSlotStyle(d, p)]"
             >{{ getSlotText(d, p) }}</div>
           </template>
         </div>
