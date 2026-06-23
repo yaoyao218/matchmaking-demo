@@ -115,11 +115,51 @@ const newTitle = ref('')
 const newMaxMembers = ref(5)
 const createError = ref('')
 
+// Modal schedule grid state
+const newBusyCells = ref(new Set<string>())
+const newIsDragging = ref(false)
+const newDragSetMode = ref(true)
+
+const newScheduleMask = computed(() => {
+  let mask = 0n
+  newBusyCells.value.forEach(key => {
+    const [d, p] = key.split('-').map(Number)
+    const bit = BigInt((d - 1) * 10 + (p - 1))
+    mask |= (1n << bit)
+  })
+  return mask.toString()
+})
+
+function isNewBusy(d: number, p: number): boolean {
+  return newBusyCells.value.has(`${d}-${p}`)
+}
+
+function toggleNewSlot(d: number, p: number) {
+  const key = `${d}-${p}`
+  const next = new Set(newBusyCells.value)
+  if (newDragSetMode.value) next.add(key)
+  else next.delete(key)
+  newBusyCells.value = next
+}
+
+function onNewGridMousedown(d: number, p: number) {
+  newIsDragging.value = true
+  newDragSetMode.value = !isNewBusy(d, p)
+  toggleNewSlot(d, p)
+}
+
+function onNewGridMouseenter(d: number, p: number) {
+  if (newIsDragging.value) toggleNewSlot(d, p)
+}
+
+function onNewGridMouseup() { newIsDragging.value = false }
+
 function openCreateModal() {
   newCourseCode.value = ''
   newTitle.value = ''
   newMaxMembers.value = 5
   createError.value = ''
+  newBusyCells.value = new Set()
   createModalOpen.value = true
 }
 
@@ -128,7 +168,7 @@ function confirmCreate() {
     createError.value = '課程代碼與專案名稱不可為空'
     return
   }
-  const project = createProject(newCourseCode.value.trim(), newTitle.value.trim(), newMaxMembers.value)
+  const project = createProject(newCourseCode.value.trim(), newTitle.value.trim(), newMaxMembers.value, newScheduleMask.value)
   selectedProjectId.value = project.id
   createModalOpen.value = false
 }
@@ -470,6 +510,41 @@ function getMemberSlotStyle(mask: string, d: number, p: number): string {
                 <button @click="newMaxMembers = Math.min(10, newMaxMembers + 1)" class="w-8 h-8 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-lg leading-none flex items-center justify-center">+</button>
               </div>
             </div>
+
+            <!-- Schedule grid -->
+            <div>
+              <div class="flex justify-between items-center mb-1.5">
+                <label class="text-xs font-medium text-slate-500">組員既有課表（拖曳圈選）</label>
+                <button @click="newBusyCells = new Set()" class="text-xs text-slate-400 hover:text-slate-600">清除</button>
+              </div>
+              <div
+                class="grid gap-1 bg-slate-50 p-2 rounded-xl border border-slate-100 select-none"
+                style="grid-template-columns: 1.5rem repeat(5, 1fr);"
+                @mouseleave="onNewGridMouseup"
+                @mouseup="onNewGridMouseup"
+              >
+                <div class="text-center text-[10px] text-slate-400 py-0.5"></div>
+                <div v-for="d in 5" :key="`nh${d}`" class="text-center text-[10px] font-bold text-slate-600 py-0.5">
+                  {{ ['一','二','三','四','五'][d - 1] }}
+                </div>
+                <template v-for="p in 10" :key="`nrow${p}`">
+                  <div class="flex items-center justify-center font-mono text-[10px] text-slate-400">{{ p }}</div>
+                  <div
+                    v-for="d in 5"
+                    :key="`n${d}-${p}`"
+                    @mousedown.prevent="onNewGridMousedown(d, p)"
+                    @mouseenter="onNewGridMouseenter(d, p)"
+                    :class="[
+                      'h-7 rounded border text-[10px] font-bold flex items-center justify-center cursor-pointer transition-all duration-150',
+                      isNewBusy(d, p)
+                        ? 'bg-blue-600 border-blue-700 text-white'
+                        : 'bg-white border-slate-200 hover:bg-blue-50 hover:border-blue-300 text-slate-300',
+                    ]"
+                  >{{ isNewBusy(d, p) ? '課' : '' }}</div>
+                </template>
+              </div>
+            </div>
+
             <p v-if="createError" class="text-xs text-red-500">{{ createError }}</p>
           </div>
           <div class="px-5 pb-5 flex justify-end gap-2">

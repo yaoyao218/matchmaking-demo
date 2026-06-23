@@ -128,7 +128,7 @@ export function rejectApplication(appId: number, reason: string) {
   if (app) { app.status = 'REJECTED'; app.rejectReason = reason }
 }
 
-export function createProject(courseCode: string, title: string, maxMembers: number): Project {
+export function createProject(courseCode: string, title: string, maxMembers: number, initialMask = '0'): Project {
   const project: Project = {
     id: nextProjectId++,
     courseCode,
@@ -136,7 +136,7 @@ export function createProject(courseCode: string, title: string, maxMembers: num
     maxMembers,
     currentMembers: 1,
     isOpen: true,
-    groupScheduleMask: userSchedules[currentActiveUser.value.id] ?? '0',
+    groupScheduleMask: initialMask,
     leaderId: currentActiveUser.value.id,
   }
   projectsArray.push(project)
